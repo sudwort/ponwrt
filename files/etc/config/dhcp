@@ -1,0 +1,29 @@
+# PonWrt DHCP 预置配置 — 桥接模式下光猫不接管内网
+# 光猫接入现有内网后必须关闭自己的 DHCP，否则会跟主路由（10.0.0.1）抢着分配 IP，
+# 导致内网设备拿到错误网关而上不了网。
+
+config dnsmasq
+	option domainneeded '1'
+	option localise_queries '1'
+	option rebind_protection '1'
+	option local '/lan/'
+	option domain 'lan'
+	option expandhosts '1'
+	option cachesize '1000'
+	option authoritative '1'
+	option readethers '1'
+	option leasefile '/tmp/dhcp.leases'
+	option resolvfile '/tmp/resolv.conf.d/resolv.conf.auto'
+	option localservice '1'
+	option ednspacket_max '1232'
+
+# 关闭 LAN 侧 DHCP —— 关键
+config dhcp 'lan'
+	option interface 'lan'
+	option ignore '1'
+
+config odhcpd 'odhcpd'
+	option maindhcp '0'
+	option leasefile '/tmp/hosts/odhcpd'
+	option leasetrigger '/usr/sbin/odhcpd-update'
+	option loglevel '4'
