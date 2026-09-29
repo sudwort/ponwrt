@@ -1,0 +1,21 @@
+#!/bin/sh
+# 首次启动时执行（由 /etc/init.d/boot 调用，成功后本文件会被自动删除）
+#
+# 作用：把 lan2 的管理接口 mgmt 加进防火墙的 lan 区。
+# 不加这条的话，mgmt 不属于任何 zone，防火墙默认拒绝，
+# 从 10.0.0.x 内网就访问不了光猫的 LuCI 后台和 SSH。
+
+idx=0
+while uci -q get "firewall.@zone[$idx].name" >/dev/null; do
+	name="$(uci -q get "firewall.@zone[$idx].name")"
+	if [ "$name" = "lan" ]; then
+		if ! uci -q get "firewall.@zone[$idx].network" | grep -qx "mgmt"; then
+			uci add_list "firewall.@zone[$idx].network"='mgmt'
+			uci commit firewall
+		fi
+		break
+	fi
+	idx=$((idx + 1))
+done
+
+exit 0
