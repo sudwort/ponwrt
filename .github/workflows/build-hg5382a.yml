@@ -38,14 +38,17 @@ jobs:
       - name: 加入 NPU 状态界面包
         run: |
           git clone --depth 1 https://github.com/rchen14b/luci-app-airoha-npu.git package/luci-app-airoha-npu
+          # 该仓库根目录和同名子目录里各有一份 Makefile/htdocs/root/po，
+          # 嵌套那份会让 OpenWrt 扫描时重复注册同一个包，必须删掉
+          rm -rf package/luci-app-airoha-npu/luci-app-airoha-npu
           ls package/luci-app-airoha-npu
 
-      - name: 生成配置（只保留 HG5382A）
+      - name: 生成配置
         run: |
           cp configs/an7581.config .config
-          # 关闭其余设备 profile，只留 fiberhome_hg5382a
-          sed -i 's/^CONFIG_TARGET_DEVICE_airoha_an7581_DEVICE_\(.*\)=y/# CONFIG_TARGET_DEVICE_airoha_an7581_DEVICE_\1 is not set/' .config
-          sed -i 's/^# CONFIG_TARGET_airoha_an7581_DEVICE_fiberhome_hg5382a is not set/CONFIG_TARGET_airoha_an7581_DEVICE_fiberhome_hg5382a=y/' .config
+          # 注意：不要单选型号！官方 config 启用哪些设备就按它的原样编。
+          # 之前手动只留 hg5382a，破坏了设备符号联动（choice / image 布尔 / DEVICE_PACKAGES
+          # 是三组不同符号），导致 PON 前端/驱动缺失，且事后补驱动也救不回来。
           # 开启 initramfs 恢复镜像（产物后缀 -recovery.itb）
           sed -i 's/.*CONFIG_TARGET_ROOTFS_INITRAMFS.*/CONFIG_TARGET_ROOTFS_INITRAMFS=y/' .config
           # 开启 NPU 流量统计（内核选项，默认关闭）
@@ -55,15 +58,19 @@ jobs:
           # 界面包需要的：debugfs（PPE 流表）、devmem（Frame Engine 寄存器与超频）
           echo 'CONFIG_KERNEL_DEBUG_FS=y' >> .config
           echo 'CONFIG_BUSYBOX_CONFIG_DEVMEM=y' >> .config
-          # 开启 ccache（官方 config 里默认是关的，不开的话每次都从零编译，约 100 分钟）
+          # 开启 ccache（官方 config 默认关闭，不开每次从零编译约 100 分钟）
           sed -i 's|^# CONFIG_CCACHE is not set$|CONFIG_CCACHE=y|' .config
           sed -i 's|^CONFIG_CCACHE_DIR=.*$|CONFIG_CCACHE_DIR="/home/runner/.ccache"|' .config
           make defconfig
-          echo '--- 确认 NPU 与界面包配置 ---'
-          grep -iE 'AIROHA|NPU|DEBUG_FS|DEVMEM' .config | head -12
-          grep -E 'CONFIG_TARGET_DEVICE.*=y|CONFIG_TARGET_ROOTFS_INITRAMFS' .config
-          echo '--- 确认 ccache 已开启 ---'
-          grep -E '^CONFIG_CCACHE' .config
+          echo '--- 关键配置硬校验：缺任何一条直接失败，不带病编两小时 ---'
+          grep -q '^CONFIG_PACKAGE_luci-app-airoha-npu=y$' .config || { echo '::error::luci-app-airoha-npu 没被 .config 接受，界面包注册失败'; exit 1; }
+          grep -q '^CONFIG_KERNEL_NET_AIROHA_FLOW_STATS=y$' .config || { echo '::error::NET_AIROHA_FLOW_STATS 没生效'; exit 1; }
+          grep -q '^CONFIG_KERNEL_DEBUG_FS=y$' .config || { echo '::error::DEBUG_FS 没生效'; exit 1; }
+          grep -q '^CONFIG_BUSYBOX_CONFIG_DEVMEM=y$' .config || { echo '::error::devmem 没生效'; exit 1; }
+          grep -q '^CONFIG_CCACHE=y$' .config || { echo '::error::ccache 没启用'; exit 1; }
+          grep -E '^CONFIG_PACKAGE_luci-app-airoha-npu=y$|^CONFIG_KERNEL_NET_AIROHA_FLOW_STATS=y$|^CONFIG_KERNEL_DEBUG_FS=y$|^CONFIG_BUSYBOX_CONFIG_DEVMEM=y$|^CONFIG_CCACHE=y$' .config
+          echo '--- 将编译的设备 ---'
+          grep -E '^CONFIG_TARGET_DEVICE_.*_DEVICE_.*=y' .config
 
       - name: 确认自定义配置已就位
         run: |
@@ -82,9 +89,13 @@ jobs:
       - name: 收集产物
         run: |
           mkdir -p artifacts
-          find bin/targets/airoha/an7581 -type f \
+          # 现在会编出全部设备的镜像，只挑 hg5382a 的进产物（不然产物几百 MB）
+          find bin/targets/airoha/an7581 -type f -name '*fiberhome_hg5382a*' \
             \( -name '*.itb' -o -name '*.bin' -o -name '*.img' -o -name '*.tar' \) \
             -exec cp {} artifacts/ \;
+          # 带上完整包清单 + 界面包 ipk，方便直接核对 NPU 界面到底编进去没有
+          cp bin/targets/airoha/an7581/packages.manifest artifacts/ 2>/dev/null || true
+          find bin -name 'luci-app-airoha-npu*' \( -name '*.ipk' -o -name '*.apk' \) -exec cp {} artifacts/ \; 2>/dev/null || true
           ls -lh artifacts/
 
       - name: 上传固件
