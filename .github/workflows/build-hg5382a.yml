@@ -51,8 +51,9 @@ jobs:
           # 是三组不同符号），导致 PON 前端/驱动缺失，且事后补驱动也救不回来。
           # 开启 initramfs 恢复镜像（产物后缀 -recovery.itb）
           sed -i 's/.*CONFIG_TARGET_ROOTFS_INITRAMFS.*/CONFIG_TARGET_ROOTFS_INITRAMFS=y/' .config
-          # 开启 NPU 流量统计（内核选项，默认关闭）
-          echo 'CONFIG_KERNEL_NET_AIROHA_FLOW_STATS=y' >> .config
+          # 开启 NPU 流量统计：这个内核选项没有暴露到 Config-kernel.in，
+          # 用 CONFIG_KERNEL_ 前缀喂 .config 会被 defconfig 丢弃，必须直接改内核配置文件
+          sed -i 's|^# CONFIG_NET_AIROHA_FLOW_STATS is not set$|CONFIG_NET_AIROHA_FLOW_STATS=y|' target/linux/airoha/an7581/config-6.18
           # NPU 状态界面包
           echo 'CONFIG_PACKAGE_luci-app-airoha-npu=y' >> .config
           # 界面包需要的：debugfs（PPE 流表）、devmem（Frame Engine 寄存器与超频）
@@ -64,11 +65,12 @@ jobs:
           make defconfig
           echo '--- 关键配置硬校验：缺任何一条直接失败，不带病编两小时 ---'
           grep -q '^CONFIG_PACKAGE_luci-app-airoha-npu=y$' .config || { echo '::error::luci-app-airoha-npu 没被 .config 接受，界面包注册失败'; exit 1; }
-          grep -q '^CONFIG_KERNEL_NET_AIROHA_FLOW_STATS=y$' .config || { echo '::error::NET_AIROHA_FLOW_STATS 没生效'; exit 1; }
+          grep -q '^CONFIG_NET_AIROHA_FLOW_STATS=y$' target/linux/airoha/an7581/config-6.18 || { echo '::error::FLOW_STATS 没改进内核配置文件'; exit 1; }
           grep -q '^CONFIG_KERNEL_DEBUG_FS=y$' .config || { echo '::error::DEBUG_FS 没生效'; exit 1; }
           grep -q '^CONFIG_BUSYBOX_CONFIG_DEVMEM=y$' .config || { echo '::error::devmem 没生效'; exit 1; }
           grep -q '^CONFIG_CCACHE=y$' .config || { echo '::error::ccache 没启用'; exit 1; }
-          grep -E '^CONFIG_PACKAGE_luci-app-airoha-npu=y$|^CONFIG_KERNEL_NET_AIROHA_FLOW_STATS=y$|^CONFIG_KERNEL_DEBUG_FS=y$|^CONFIG_BUSYBOX_CONFIG_DEVMEM=y$|^CONFIG_CCACHE=y$' .config
+          grep -E '^CONFIG_PACKAGE_luci-app-airoha-npu=y$|^CONFIG_KERNEL_DEBUG_FS=y$|^CONFIG_BUSYBOX_CONFIG_DEVMEM=y$|^CONFIG_CCACHE=y$' .config
+          grep -E '^CONFIG_NET_AIROHA_FLOW_STATS=y$' target/linux/airoha/an7581/config-6.18
           echo '--- 将编译的设备 ---'
           grep -E '^CONFIG_TARGET_DEVICE_.*_DEVICE_.*=y' .config
 
