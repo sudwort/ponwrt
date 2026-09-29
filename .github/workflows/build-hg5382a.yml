@@ -35,6 +35,11 @@ jobs:
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
+      - name: 加入 NPU 状态界面包
+        run: |
+          git clone --depth 1 https://github.com/rchen14b/luci-app-airoha-npu.git package/luci-app-airoha-npu
+          ls package/luci-app-airoha-npu
+
       - name: 生成配置（只保留 HG5382A）
         run: |
           cp configs/an7581.config .config
@@ -45,9 +50,14 @@ jobs:
           sed -i 's/.*CONFIG_TARGET_ROOTFS_INITRAMFS.*/CONFIG_TARGET_ROOTFS_INITRAMFS=y/' .config
           # 开启 NPU 流量统计（内核选项，默认关闭）
           echo 'CONFIG_KERNEL_NET_AIROHA_FLOW_STATS=y' >> .config
+          # NPU 状态界面包
+          echo 'CONFIG_PACKAGE_luci-app-airoha-npu=y' >> .config
+          # 界面包需要的：debugfs（PPE 流表）、devmem（Frame Engine 寄存器与超频）
+          echo 'CONFIG_KERNEL_DEBUG_FS=y' >> .config
+          echo 'CONFIG_BUSYBOX_CONFIG_DEVMEM=y' >> .config
           make defconfig
-          echo '--- 确认 NPU 相关配置 ---'
-          grep -iE 'AIROHA|NPU' .config | head -10
+          echo '--- 确认 NPU 与界面包配置 ---'
+          grep -iE 'AIROHA|NPU|DEBUG_FS|DEVMEM' .config | head -12
           grep -E 'CONFIG_TARGET_DEVICE.*=y|CONFIG_TARGET_ROOTFS_INITRAMFS' .config
 
       - name: 编译
