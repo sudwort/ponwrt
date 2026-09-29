@@ -60,6 +60,11 @@ jobs:
           grep -iE 'AIROHA|NPU|DEBUG_FS|DEVMEM' .config | head -12
           grep -E 'CONFIG_TARGET_DEVICE.*=y|CONFIG_TARGET_ROOTFS_INITRAMFS' .config
 
+      - name: 确认自定义配置已就位
+        run: |
+          echo '--- 源码树根 files/ 下的文件（会被打进固件根文件系统）---'
+          find files -type f 2>/dev/null | sed 's/^/  /' || echo '  （无 files/ 目录，固件用默认网络配置）'
+
       - name: 编译
         run: |
           export CCACHE_DIR=~/.ccache
