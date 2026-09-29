@@ -1,13 +1,18 @@
 # PonWrt 网络预置配置 — FiberHome HG5382A / HG5582A
-# 模式：桥接（路由器拨号）+ 光猫保留管理地址
+# 模式：桥接（路由器 PPPoE 拨号）+ 光猫保留两个管理通道
 #
-# 拓扑：
-#   lan1 (2.5G 口) + pon0  →  br-wan（桥接透传，路由器 PPPoE 拨号）
-#   lan2/lan3/lan4 (千兆口) →  br-lan（管理网，光猫地址 192.168.1.1）
+# 口序（官方 02_network：lan1 用外挂 GPY211 = 2.5G 口，lan2~lan4 走内置交换芯片 = 千兆口）
 #
-# 用法：路由器接 2.5G 口拨号；用一根网线把光猫的千兆口接到路由器 LAN 或交换机，
-#       光猫自取内网地址 10.0.0.2，内网设备直接访问 http://10.0.0.2 进后台。
-#       注意：必须关闭光猫自带的 DHCP（见 files/etc/config/dhcp），否则会跟路由器抢发 IP。
+#   pon0 + lan1 (2.5G)  →  br-wan   桥接透传，路由器在这口上 PPPoE
+#   lan2                →  mgmt     静态 10.0.0.30/24，接内网交换机，供全家设备访问后台
+#   lan3 + lan4         →  br-lan   192.168.1.1/24 + DHCP，本地维护口，电脑直连即用
+#
+# 为什么 lan2 和 lan3/lan4 必须分开：
+#   如果它们同属一个桥，dnsmasq 的 DHCP 会从 lan2 漏进 10.0.0.x 内网，
+#   跟主路由 10.0.0.1 抢着发 IP，导致内网设备上不了网。分成两个接口就没这个问题。
+#
+# 注意：lan2 这个 mgmt 接口要加进防火墙 lan 区，否则访问不了后台。
+#      由 files/etc/uci-defaults/99-ponwrt-mgmt 在首次启动时自动完成。
 
 config device
 	option name 'br-wan'
@@ -19,18 +24,25 @@ config interface 'wan'
 	option device 'br-wan'
 	option proto 'none'
 
+# ---- lan2：管理口，接内网交换机 ----
+config interface 'mgmt'
+	option device 'lan2'
+	option proto 'static'
+	option ipaddr '10.0.0.30'
+	option netmask '255.255.255.0'
+	option gateway '10.0.0.1'
+	list dns '10.0.0.1'
+
+# ---- lan3 / lan4：本地维护口，保留出厂的 192.168.1.x 并带 DHCP ----
 config device
 	option name 'br-lan'
 	option type 'bridge'
-	list ports 'lan2'
 	list ports 'lan3'
 	list ports 'lan4'
 
 config interface 'lan'
 	option device 'br-lan'
 	option proto 'static'
-	option ipaddr '10.0.0.2'
+	option ipaddr '192.168.1.1'
 	option netmask '255.255.255.0'
-	option gateway '10.0.0.1'
-	list dns '10.0.0.1'
 	option ip6assign '60'
