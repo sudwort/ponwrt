@@ -55,10 +55,15 @@ jobs:
           # 界面包需要的：debugfs（PPE 流表）、devmem（Frame Engine 寄存器与超频）
           echo 'CONFIG_KERNEL_DEBUG_FS=y' >> .config
           echo 'CONFIG_BUSYBOX_CONFIG_DEVMEM=y' >> .config
+          # 开启 ccache（官方 config 里默认是关的，不开的话每次都从零编译，约 100 分钟）
+          sed -i 's|^# CONFIG_CCACHE is not set$|CONFIG_CCACHE=y|' .config
+          sed -i 's|^CONFIG_CCACHE_DIR=.*$|CONFIG_CCACHE_DIR="/home/runner/.ccache"|' .config
           make defconfig
           echo '--- 确认 NPU 与界面包配置 ---'
           grep -iE 'AIROHA|NPU|DEBUG_FS|DEVMEM' .config | head -12
           grep -E 'CONFIG_TARGET_DEVICE.*=y|CONFIG_TARGET_ROOTFS_INITRAMFS' .config
+          echo '--- 确认 ccache 已开启 ---'
+          grep -E '^CONFIG_CCACHE' .config
 
       - name: 确认自定义配置已就位
         run: |
@@ -68,7 +73,11 @@ jobs:
       - name: 编译
         run: |
           export CCACHE_DIR=~/.ccache
+          export CCACHE_MAXSIZE=5G
+          ccache -z                      # 清零统计，方便看本次实际命中率
           make -j$(nproc) 2>&1 | tail -n 2000
+          echo '--- 本次 ccache 命中情况 ---'
+          ccache -s || true
 
       - name: 收集产物
         run: |
