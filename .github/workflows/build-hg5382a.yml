@@ -1,0 +1,67 @@
+name: Build PonWrt (FiberHome HG5382A / HG5582A)
+
+on:
+  workflow_dispatch:      # 允许在网页手动点“Run workflow”触发
+  # push:
+  #   branches: [master] # 如需推送即编译，取消注释
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 340   # 免费版 job 上限 6 小时，这里留安全余量
+
+    steps:
+      - name: 检出源码
+        uses: actions/checkout@v4
+
+      - name: 安装编译依赖
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y --no-install-recommends \
+            build-essential clang flex bison g++ gawk gcc-multilib g++-multilib \
+            gettext git libncurses-dev libssl-dev python3 python3-pip python3-setuptools \
+            rsync unzip zlib1g-dev file wget subversion ccache zstd xz-utils \
+            device-tree-compiler libelf-dev qemu-utils mkisofs
+
+      - name: 恢复 ccache
+        uses: actions/cache@v4
+        with:
+          path: ~/.ccache
+          key: ccache-an7581-${{ github.sha }}
+          restore-keys: ccache-an7581-
+
+      - name: 更新 feeds
+        run: |
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+
+      - name: 生成配置（只保留 HG5382A）
+        run: |
+          cp configs/an7581.config .config
+          # 关闭其余设备 profile，只留 fiberhome_hg5382a
+          sed -i 's/^CONFIG_TARGET_DEVICE_airoha_an7581_DEVICE_\(.*\)=y/# CONFIG_TARGET_DEVICE_airoha_an7581_DEVICE_\1 is not set/' .config
+          sed -i 's/^# CONFIG_TARGET_airoha_an7581_DEVICE_fiberhome_hg5382a is not set/CONFIG_TARGET_airoha_an7581_DEVICE_fiberhome_hg5382a=y/' .config
+          # 开启 initramfs 恢复镜像（产物后缀 -recovery.itb）
+          sed -i 's/.*CONFIG_TARGET_ROOTFS_INITRAMFS.*/CONFIG_TARGET_ROOTFS_INITRAMFS=y/' .config
+          make defconfig
+          grep -E 'CONFIG_TARGET_DEVICE.*=y|CONFIG_TARGET_ROOTFS_INITRAMFS' .config
+
+      - name: 编译
+        run: |
+          export CCACHE_DIR=~/.ccache
+          make -j$(nproc) 2>&1 | tail -n 2000
+
+      - name: 收集产物
+        run: |
+          mkdir -p artifacts
+          find bin/targets/airoha/an7581 -type f \
+            \( -name '*.itb' -o -name '*.bin' -o -name '*.img' -o -name '*.tar' \) \
+            -exec cp {} artifacts/ \;
+          ls -lh artifacts/
+
+      - name: 上传固件
+        uses: actions/upload-artifact@v4
+        with:
+          name: ponwrt-an7581-hg5382a
+          path: artifacts/
+          retention-days: 30
