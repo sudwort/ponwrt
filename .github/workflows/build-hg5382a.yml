@@ -43,7 +43,11 @@ jobs:
           sed -i 's/^# CONFIG_TARGET_airoha_an7581_DEVICE_fiberhome_hg5382a is not set/CONFIG_TARGET_airoha_an7581_DEVICE_fiberhome_hg5382a=y/' .config
           # 开启 initramfs 恢复镜像（产物后缀 -recovery.itb）
           sed -i 's/.*CONFIG_TARGET_ROOTFS_INITRAMFS.*/CONFIG_TARGET_ROOTFS_INITRAMFS=y/' .config
+          # 开启 NPU 流量统计（内核选项，默认关闭）
+          echo 'CONFIG_KERNEL_NET_AIROHA_FLOW_STATS=y' >> .config
           make defconfig
+          echo '--- 确认 NPU 相关配置 ---'
+          grep -iE 'AIROHA|NPU' .config | head -10
           grep -E 'CONFIG_TARGET_DEVICE.*=y|CONFIG_TARGET_ROOTFS_INITRAMFS' .config
 
       - name: 编译
