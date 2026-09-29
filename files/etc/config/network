@@ -1,0 +1,36 @@
+# PonWrt 网络预置配置 — FiberHome HG5382A / HG5582A
+# 模式：桥接（路由器拨号）+ 光猫保留管理地址
+#
+# 拓扑：
+#   lan1 (2.5G 口) + pon0  →  br-wan（桥接透传，路由器 PPPoE 拨号）
+#   lan2/lan3/lan4 (千兆口) →  br-lan（管理网，光猫地址 192.168.1.1）
+#
+# 用法：路由器接 2.5G 口拨号；用一根网线把光猫的千兆口接到路由器 LAN 或交换机，
+#       光猫自取内网地址 10.0.0.2，内网设备直接访问 http://10.0.0.2 进后台。
+#       注意：必须关闭光猫自带的 DHCP（见 files/etc/config/dhcp），否则会跟路由器抢发 IP。
+
+config device
+	option name 'br-wan'
+	option type 'bridge'
+	list ports 'pon0'
+	list ports 'lan1'
+
+config interface 'wan'
+	option device 'br-wan'
+	option proto 'none'
+
+config device
+	option name 'br-lan'
+	option type 'bridge'
+	list ports 'lan2'
+	list ports 'lan3'
+	list ports 'lan4'
+
+config interface 'lan'
+	option device 'br-lan'
+	option proto 'static'
+	option ipaddr '10.0.0.2'
+	option netmask '255.255.255.0'
+	option gateway '10.0.0.1'
+	list dns '10.0.0.1'
+	option ip6assign '60'
