@@ -67,6 +67,10 @@ jobs:
           echo 'CONFIG_PACKAGE_luci-app-airoha-npu=y' >> .config
           # 中文翻译子包（po/zh_Hans 会被 luci.mk 编译成 -zh-cn 变体）
           echo 'CONFIG_PACKAGE_luci-app-airoha-npu-zh-cn=y' >> .config
+          # IPTV 插件（用户要求编译进固件；官方 config 只把它设为 MODULE_DEFAULT，
+          # 不会真正打进镜像，必须显式选 y）
+          echo 'CONFIG_PACKAGE_luci-app-iptv=y' >> .config
+          echo 'CONFIG_PACKAGE_luci-i18n-iptv-zh-cn=y' >> .config
           # 界面包需要的：debugfs（PPE 流表）、devmem（Frame Engine 寄存器与超频）
           echo 'CONFIG_KERNEL_DEBUG_FS=y' >> .config
           echo 'CONFIG_BUSYBOX_CONFIG_DEVMEM=y' >> .config
@@ -79,6 +83,7 @@ jobs:
           grep -q '^CONFIG_NET_AIROHA_FLOW_STATS=y$' target/linux/airoha/an7581/config-6.18 || { echo '::error::FLOW_STATS 没改进内核配置文件'; exit 1; }
           grep -q '^CONFIG_KERNEL_DEBUG_FS=y$' .config || { echo '::error::DEBUG_FS 没生效'; exit 1; }
           grep -q '^CONFIG_BUSYBOX_CONFIG_DEVMEM=y$' .config || { echo '::error::devmem 没生效'; exit 1; }
+          grep -q '^CONFIG_PACKAGE_luci-app-iptv=y$' .config || { echo '::error::iptv 没被 .config 接受，IPTV 插件没编译进去'; exit 1; }
           grep -q '^CONFIG_CCACHE=y$' .config || { echo '::error::ccache 没启用'; exit 1; }
           grep -E '^CONFIG_PACKAGE_luci-app-airoha-npu=y$|^CONFIG_KERNEL_DEBUG_FS=y$|^CONFIG_BUSYBOX_CONFIG_DEVMEM=y$|^CONFIG_CCACHE=y$' .config
           grep -E '^CONFIG_NET_AIROHA_FLOW_STATS=y$' target/linux/airoha/an7581/config-6.18
