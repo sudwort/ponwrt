@@ -1,0 +1,20 @@
+#!/bin/sh
+# 首次启动时执行（由 /etc/init.d/boot 调用，成功后本文件会被自动删除）
+#
+# 作用：开启流量卸载，让桥接流量真正走 NPU/PPE 硬件转发。
+#
+# 背景（为什么要加这一段）：
+#   1) OpenWrt 默认只开软件卸载 flow_offloading，不开 flow_offloading_hw。
+#      只有 flow_offloading_hw=1 时，firewall4 生成的 flowtable 才会带
+#      "flags offload"，把流表下发给硬件（Airoha AN7581 = NPU/PPE）。
+#   2) 桥接用的 br-wan（pon0 + lan1 2.5G 口）是透明桥，不属于任何防火墙
+#      zone，老版本 firewall4 不会把它放进 flowtable，导致桥接流量全部
+#      走 CPU 软转发 —— 看起来就是"NPU 没干活"。
+#      上游已在 2026-09-29 合并补丁：为 bridge 家族单独生成 flowtable fb，
+#      透明桥也能卸载。这里把开关打开，那条补丁才会真正生效。
+
+uci -q set firewall.@defaults[0].flow_offloading='1'
+uci -q set firewall.@defaults[0].flow_offloading_hw='1'
+uci commit firewall
+
+exit 0
