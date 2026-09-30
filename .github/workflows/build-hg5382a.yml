@@ -78,6 +78,16 @@ jobs:
         run: |
           echo '--- 源码树根 files/ 下的文件（会被打进固件根文件系统）---'
           find files -type f 2>/dev/null | sed 's/^/  /' || echo '  （无 files/ 目录，固件用默认网络配置）'
+          echo '--- 硬校验：这几样缺一样就不往下编 ---'
+          test -f files/etc/uci-defaults/98-ponwrt-offload || { echo '::error::缺 98-ponwrt-offload，NPU 硬件卸载不会开'; exit 1; }
+          test -f files/etc/uci-defaults/99-ponwrt-mgmt || { echo '::error::缺 99-ponwrt-mgmt，10.0.0.30 管理口会被防火墙挡掉'; exit 1; }
+          test -f files/etc/config/network || { echo '::error::缺预置网络配置'; exit 1; }
+          test -f files/etc/config/dhcp || { echo '::error::缺预置 DHCP 配置'; exit 1; }
+          # 桥接流量能不能被 NPU 卸载，全靠 firewall4 这个补丁：
+          # 它给 bridge 家族单独生成 flowtable fb，透明桥（br-wan）才能进卸载表
+          test -f package/network/config/firewall4/patches/001-add-bridge-flowtable-support.patch || { echo '::error::缺 firewall4 桥接 flowtable 补丁，桥接流量会全部走 CPU'; exit 1; }
+          grep -q 'flow_offloading_hw' files/etc/uci-defaults/98-ponwrt-offload || { echo '::error::98-ponwrt-offload 里没有 flow_offloading_hw'; exit 1; }
+          echo '  预置文件与桥接卸载补丁校验通过'
 
       - name: 编译
         run: |
