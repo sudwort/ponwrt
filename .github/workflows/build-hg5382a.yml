@@ -41,7 +41,16 @@ jobs:
           # 该仓库根目录和同名子目录里各有一份 Makefile/htdocs/root/po，
           # 嵌套那份会让 OpenWrt 扫描时重复注册同一个包，必须删掉
           rm -rf package/luci-app-airoha-npu/luci-app-airoha-npu
+          # 该上游包只有英文和西班牙文，没有中文。从本仓库 extra/ 拷入 zh_Hans
+          # 翻译，让“状态 → SoC Status”那页也显示中文（配置已开 CONFIG_LUCI_LANG_zh_Hans）
+          mkdir -p package/luci-app-airoha-npu/po/zh_Hans
+          cp extra/luci-app-airoha-npu/po/zh_Hans/luci-app-airoha-npu.po \
+             package/luci-app-airoha-npu/po/zh_Hans/luci-app-airoha-npu.po
+          test -s package/luci-app-airoha-npu/po/zh_Hans/luci-app-airoha-npu.po \
+            || { echo '::error::中文翻译没拷进去'; exit 1; }
           ls package/luci-app-airoha-npu
+          echo '--- 翻译文件清单 ---'
+          ls -R package/luci-app-airoha-npu/po
 
       - name: 生成配置
         run: |
@@ -56,6 +65,8 @@ jobs:
           sed -i 's|^# CONFIG_NET_AIROHA_FLOW_STATS is not set$|CONFIG_NET_AIROHA_FLOW_STATS=y|' target/linux/airoha/an7581/config-6.18
           # NPU 状态界面包
           echo 'CONFIG_PACKAGE_luci-app-airoha-npu=y' >> .config
+          # 中文翻译子包（po/zh_Hans 会被 luci.mk 编译成 -zh-cn 变体）
+          echo 'CONFIG_PACKAGE_luci-app-airoha-npu-zh-cn=y' >> .config
           # 界面包需要的：debugfs（PPE 流表）、devmem（Frame Engine 寄存器与超频）
           echo 'CONFIG_KERNEL_DEBUG_FS=y' >> .config
           echo 'CONFIG_BUSYBOX_CONFIG_DEVMEM=y' >> .config
